@@ -19,54 +19,66 @@ export default function HomePage() {
 
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [currentCartoonTitle, setCurrentCartoonTitle] = useState<string>('');
-  const [totalEpisodesToFetch, setTotalEpisodesToFetch] = useState<number>(0);
+  const [currentStartEpisode, setCurrentStartEpisode] = useState<number>(0);
+  const [currentEndEpisode, setCurrentEndEpisode] = useState<number>(0);
   const [isFetching, setIsFetching] = useState(false);
   const [overallProgress, setOverallProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [apiQuotaErrorOccurred, setApiQuotaErrorOccurred] = useState<boolean>(false);
 
-  const initializeEpisodes = (count: number) => {
+  const initializeEpisodes = (start: number, end: number) => {
+    const count = end - start + 1;
     return Array.from({ length: count }, (_, i) => ({
-      episodeNumber: i + 1,
-      title: `الحلقة ${i + 1}`,
+      episodeNumber: start + i,
+      title: `الحلقة ${start + i}`,
       link: '#',
       duration: 0,
-      thumbnail: `https://placehold.co/480x360.png?text=Pending+${i + 1}`,
+      thumbnail: `https://placehold.co/480x360.png?text=Pending+${start + i}`,
       dataAihint: "video placeholder",
       status: 'Pending' as const,
     }));
   };
 
-  const handleFetchEpisodes = useCallback(async (title: string, count: number) => {
+  const handleFetchEpisodes = useCallback(async (title: string, startEp: number, endEp: number) => {
     setIsFetching(true);
     setError(null);
     setApiQuotaErrorOccurred(false);
     setOverallProgress(0);
     setCurrentCartoonTitle(title);
-    setTotalEpisodesToFetch(count);
+    setCurrentStartEpisode(startEp);
+    setCurrentEndEpisode(endEp);
 
-    const initialEpisodes = initializeEpisodes(count);
+    const totalEpisodesToFetch = endEp - startEp + 1;
+    if (totalEpisodesToFetch <= 0) {
+        toast({ title: "نطاق غير صالح", description: "يجب أن يكون عدد الحلقات أكبر من صفر.", variant: "destructive" });
+        setIsFetching(false);
+        return;
+    }
+
+    const initialEpisodes = initializeEpisodes(startEp, endEp);
     setEpisodes(initialEpisodes);
 
     const updatedEpisodes = [...initialEpisodes];
     let localQuotaError = false;
 
-    for (let i = 0; i < count; i++) {
-      // Check if fetching was cancelled (e.g., by navigating away or a future cancel button)
-      // For now, this state isn't changed by UI during fetch, but good for robustness
+    for (let i = 0; i < totalEpisodesToFetch; i++) {
+      const currentEpisodeNumber = startEp + i;
+      
       const currentIsFetching = await new Promise<boolean>(resolve => setTimeout(() => resolve(isFetchingRef.current), 0));
       if (!currentIsFetching && i > 0) {
           toast({ title: "تم إيقاف البحث", description: "تم إيقاف عملية البحث عن الحلقات.", variant: "default" });
           break; 
       }
 
+      const episodeIndex = updatedEpisodes.findIndex(ep => ep.episodeNumber === currentEpisodeNumber);
+      if (episodeIndex === -1) continue; // Should not happen
 
-      updatedEpisodes[i] = { ...updatedEpisodes[i], status: 'Searching...', dataAihint: "video placeholder" };
+      updatedEpisodes[episodeIndex] = { ...updatedEpisodes[episodeIndex], status: 'Searching...', dataAihint: "video placeholder" };
       setEpisodes([...updatedEpisodes]);
 
       try {
-        const fetchedEpisode = await fetchSingleEpisodeDetails(title, i + 1);
-        updatedEpisodes[i] = fetchedEpisode;
+        const fetchedEpisode = await fetchSingleEpisodeDetails(title, currentEpisodeNumber);
+        updatedEpisodes[episodeIndex] = fetchedEpisode;
         if (fetchedEpisode.status === 'Error') {
           const isQuotaError = fetchedEpisode.title.includes('تجاوز حصة API');
           if (isQuotaError) {
@@ -75,60 +87,59 @@ export default function HomePage() {
           }
           toast({
             title: isQuotaError ? "خطأ في حصة YouTube API" : "خطأ في جلب حلقة",
-            description: `الحلقة ${i + 1}: ${isQuotaError ? "يبدو أن حصة استخدام API قد انتهت." : fetchedEpisode.title}`,
+            description: `الحلقة ${currentEpisodeNumber}: ${isQuotaError ? "يبدو أن حصة استخدام API قد انتهت." : fetchedEpisode.title}`,
             variant: "destructive",
           });
         }
       } catch (e: any) {
-        console.error(`Error processing episode ${i + 1} in HomePage:`, e);
-        updatedEpisodes[i] = {
-          ...updatedEpisodes[i],
-          title: `الحلقة ${i + 1} - خطأ فادح في النظام`,
+        console.error(`Error processing episode ${currentEpisodeNumber} in HomePage:`, e);
+        updatedEpisodes[episodeIndex] = {
+          ...updatedEpisodes[episodeIndex],
+          title: `الحلقة ${currentEpisodeNumber} - خطأ فادح في النظام`,
           status: 'Error',
-          thumbnail: `https://placehold.co/480x360.png?text=Error+${i + 1}`,
+          thumbnail: `https://placehold.co/480x360.png?text=Error+${currentEpisodeNumber}`,
           dataAihint: "error placeholder",
         };
         toast({
           title: "خطأ غير متوقع",
-          description: `حدث خطأ فادح أثناء محاولة جلب الحلقة ${i + 1}.`,
+          description: `حدث خطأ فادح أثناء محاولة جلب الحلقة ${currentEpisodeNumber}.`,
           variant: "destructive",
         });
       }
       setEpisodes([...updatedEpisodes]);
-      setOverallProgress(((i + 1) / count) * 100);
+      setOverallProgress(((i + 1) / totalEpisodesToFetch) * 100);
     }
 
     setIsFetching(false);
     if (localQuotaError) {
       setError("حدث خطأ بسبب تجاوز حصة YouTube API. قد لا يتم جلب جميع الحلقات. يرجى المحاولة مرة أخرى لاحقًا أو التحقق من إعدادات مفتاح API.");
     } else if (updatedEpisodes.some(ep => ep.status === 'Error') && !error) {
-      // Only set generic error if no quota error was the primary issue and no other error is already set
       // setError("حدثت أخطاء أثناء جلب بعض الحلقات. تحقق من التفاصيل لكل حلقة.");
     }
-
 
     const foundCount = updatedEpisodes.filter(ep => ep.status === 'Found').length;
     toast({
         title: "اكتمل البحث!",
-        description: `تم العثور على ${foundCount} من أصل ${count} حلقة. ${localQuotaError ? 'بعض الحلقات فشلت بسبب تجاوز حصة API.' : ''}`,
+        description: `تم العثور على ${foundCount} من أصل ${totalEpisodesToFetch} حلقة. ${localQuotaError ? 'بعض الحلقات فشلت بسبب تجاوز حصة API.' : ''}`,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]); // Removed isFetching from deps as it causes re-runs, use ref instead for cancellation check
+  }, [toast]); 
 
-  // Ref to hold the current isFetching state for use in the loop without causing re-renders/re-runs of useCallback
   const isFetchingRef = useRef(isFetching);
   useEffect(() => {
     isFetchingRef.current = isFetching;
   }, [isFetching]);
 
-
   useEffect(() => {
     const titleFromQuery = searchParams.get('title');
-    const episodesFromQuery = searchParams.get('episodes');
-    if (titleFromQuery && episodesFromQuery && !isFetchingRef.current && episodes.length === 0) {
-      const count = parseInt(episodesFromQuery);
-      if (count > 0) {
-        handleFetchEpisodes(titleFromQuery, count);
+    const startFromQuery = searchParams.get('startEpisode');
+    const endFromQuery = searchParams.get('endEpisode');
+
+    if (titleFromQuery && startFromQuery && endFromQuery && !isFetchingRef.current && episodes.length === 0) {
+      const startEp = parseInt(startFromQuery);
+      const endEp = parseInt(endFromQuery);
+      if (startEp > 0 && endEp > 0 && endEp >= startEp) {
+        handleFetchEpisodes(titleFromQuery, startEp, endEp);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,12 +167,12 @@ export default function HomePage() {
     try {
       const fetchedEpisode = await fetchSingleEpisodeDetails(currentCartoonTitle, episodeNumber);
       updatedEpisodes[episodeIndex] = fetchedEpisode;
-      setEpisodes([...updatedEpisodes]); // Update UI immediately
+      setEpisodes([...updatedEpisodes]); 
 
       if (fetchedEpisode.status === 'Error') {
         const isQuotaError = fetchedEpisode.title.includes('تجاوز حصة API');
         if (isQuotaError) {
-            setApiQuotaErrorOccurred(true); // Set global flag
+            setApiQuotaErrorOccurred(true); 
             setError("حدث خطأ بسبب تجاوز حصة YouTube API. يرجى المحاولة مرة أخرى لاحقًا أو التحقق من إعدادات مفتاح API.");
         }
         toast({
@@ -174,7 +185,7 @@ export default function HomePage() {
             title: "اكتملت إعادة المحاولة",
             description: `تم العثور على الحلقة ${episodeNumber}.`,
         });
-      } else { // Not Found
+      } else { 
          toast({
             title: "لم يتم العثور",
             description: `لم يتم العثور على فيديو مناسب للحلقة ${episodeNumber} بعد إعادة المحاولة.`,
@@ -233,12 +244,13 @@ export default function HomePage() {
 
       {episodes.length > 0 && (
         <section className="mt-12 w-full">
-          <h2 className="text-3xl font-headline font-semibold mb-6 text-center">نتائج البحث عن "{currentCartoonTitle}"</h2>
+          <h2 className="text-3xl font-headline font-semibold mb-6 text-center">نتائج البحث عن "{currentCartoonTitle}" (الحلقات {currentStartEpisode} - {currentEndEpisode})</h2>
           <EpisodeList episodes={episodes} onReloadEpisode={handleReloadEpisode} />
           <ActionButtons 
             episodes={episodes} 
             cartoonTitle={currentCartoonTitle}
-            episodeCount={totalEpisodesToFetch}
+            startEpisode={currentStartEpisode}
+            endEpisode={currentEndEpisode}
             isFetching={isFetching}
           />
         </section>
@@ -247,7 +259,7 @@ export default function HomePage() {
       {!isFetching && episodes.length === 0 && !error && (
         <div className="mt-12 text-center text-muted-foreground">
           <TvMinimalPlay className="mx-auto h-16 w-16 mb-4 text-gray-400" />
-          <p className="text-lg">أدخل اسم الكرتون وعدد الحلقات لبدء البحث.</p>
+          <p className="text-lg">أدخل اسم الكرتون ونطاق الحلقات لبدء البحث.</p>
           <p className="text-sm">يمكنك أيضًا استخدام رابط مشارَك للبدء مباشرة.</p>
         </div>
       )}

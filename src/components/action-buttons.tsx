@@ -10,11 +10,12 @@ import { useSearchParams } from 'next/navigation';
 interface ActionButtonsProps {
   episodes: Episode[];
   cartoonTitle: string;
-  episodeCount: number;
+  startEpisode: number;
+  endEpisode: number;
   isFetching: boolean;
 }
 
-export function ActionButtons({ episodes, cartoonTitle, episodeCount, isFetching }: ActionButtonsProps) {
+export function ActionButtons({ episodes, cartoonTitle, startEpisode, endEpisode, isFetching }: ActionButtonsProps) {
   const { toast } = useToast();
   const searchParams = useSearchParams();
 
@@ -36,7 +37,7 @@ export function ActionButtons({ episodes, cartoonTitle, episodeCount, isFetching
   const handleCopySnaptubeLinks = () => {
     const links = episodes
       .filter(ep => ep.status === 'Found' && ep.link !== '#')
-      .map(ep => ep.link) // Snaptube usually just needs the direct links
+      .map(ep => ep.link) 
       .join('\n');
     
     if (links) {
@@ -49,15 +50,17 @@ export function ActionButtons({ episodes, cartoonTitle, episodeCount, isFetching
   };
 
   const handleShare = () => {
-    const title = searchParams.get('title') || cartoonTitle;
-    const count = searchParams.get('episodes') || episodeCount.toString();
+    // Use current search params from URL as primary source, fallback to props if not in URL yet
+    const titleParam = searchParams.get('title') || cartoonTitle;
+    const startParam = searchParams.get('startEpisode') || startEpisode.toString();
+    const endParam = searchParams.get('endEpisode') || endEpisode.toString();
 
-    if(!title || !count || parseInt(count) === 0) {
-        toast({ title: "خطأ", description: "الرجاء البحث أولاً لمشاركة النتائج.", variant: "destructive"});
+    if(!titleParam || !startParam || !endParam || parseInt(startParam) <= 0 || parseInt(endParam) <= 0 ) {
+        toast({ title: "خطأ", description: "الرجاء البحث أولاً لمشاركة النتائج بشكل صحيح.", variant: "destructive"});
         return;
     }
 
-    const shareUrl = `${window.location.origin}/?title=${encodeURIComponent(title)}&episodes=${count}`;
+    const shareUrl = `${window.location.origin}/?title=${encodeURIComponent(titleParam)}&startEpisode=${startParam}&endEpisode=${endParam}`;
     navigator.clipboard.writeText(shareUrl)
       .then(() => toast({ title: "تم نسخ رابط المشاركة!", description: "يمكنك الآن مشاركة هذا الرابط." }))
       .catch(() => toast({ title: "خطأ", description: "لم يتم نسخ رابط المشاركة.", variant: "destructive" }));
@@ -77,7 +80,7 @@ export function ActionButtons({ episodes, cartoonTitle, episodeCount, isFetching
     const doc = new jsPDF();
     
     doc.setFontSize(18);
-    doc.text(`قائمة حلقات: ${cartoonTitle}`, 105, 15, { align: 'center' });
+    doc.text(`قائمة حلقات: ${cartoonTitle} (من ${startEpisode} إلى ${endEpisode})`, 105, 15, { align: 'center' });
     
     const tableColumn = ["رابط الحلقة", "مدة الفيديو", "عنوان الفيديو", "رقم الحلقة"];
     const tableRows: (string | number)[][] = [];
@@ -102,12 +105,14 @@ export function ActionButtons({ episodes, cartoonTitle, episodeCount, isFetching
       headStyles: {fillColor: [38, 127, 204], halign: 'center'},
     });
     
-    doc.save(`${cartoonTitle}_episodes.pdf`);
+    doc.save(`${cartoonTitle}_episodes_${startEpisode}-${endEpisode}.pdf`);
     toast({ title: "تم التحميل!", description: "تم تحميل ملف PDF بنجاح." });
   };
 
 
   const hasResults = episodes.some(ep => ep.status === 'Found');
+  const canShare = !!cartoonTitle && startEpisode > 0 && endEpisode > 0 && endEpisode >= startEpisode;
+
 
   return (
     <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
@@ -123,7 +128,7 @@ export function ActionButtons({ episodes, cartoonTitle, episodeCount, isFetching
         <ArrowDownToLine className="ml-2 h-5 w-5" />
         نسخ روابط سناب تيوب
       </Button>
-      <Button onClick={handleShare} disabled={isFetching && (!cartoonTitle || episodeCount === 0)} variant="outline" className="text-base">
+      <Button onClick={handleShare} disabled={isFetching || !canShare} variant="outline" className="text-base">
         <Share2 className="ml-2 h-5 w-5" />
         مشاركة النتيجة
       </Button>

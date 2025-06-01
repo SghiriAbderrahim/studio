@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, type FormEvent, useEffect } from 'react';
@@ -7,41 +8,60 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Search } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface CartoonFormProps {
-  onFetchEpisodes: (title: string, count: number) => void;
+  onFetchEpisodes: (title: string, startEpisode: number, endEpisode: number) => void;
   isFetching: boolean;
 }
 
 export function CartoonForm({ onFetchEpisodes, isFetching }: CartoonFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const [title, setTitle] = useState('');
-  const [episodes, setEpisodes] = useState('');
+  const [startEpisode, setStartEpisode] = useState('');
+  const [endEpisode, setEndEpisode] = useState('');
 
   useEffect(() => {
     const titleFromQuery = searchParams.get('title');
-    const episodesFromQuery = searchParams.get('episodes');
+    const startFromQuery = searchParams.get('startEpisode');
+    const endFromQuery = searchParams.get('endEpisode');
     if (titleFromQuery) {
       setTitle(titleFromQuery);
     }
-    if (episodesFromQuery) {
-      setEpisodes(episodesFromQuery);
+    if (startFromQuery) {
+      setStartEpisode(startFromQuery);
+    }
+    if (endFromQuery) {
+      setEndEpisode(endFromQuery);
     }
   }, [searchParams]);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    const episodeCount = parseInt(episodes);
-    if (title && episodeCount > 0) {
-      onFetchEpisodes(title, episodeCount);
-      // Update URL without navigation for shareability
-      const newParams = new URLSearchParams();
-      newParams.set('title', title);
-      newParams.set('episodes', episodeCount.toString());
-      router.replace(`?${newParams.toString()}`, { scroll: false });
+    const startNum = parseInt(startEpisode);
+    const endNum = parseInt(endEpisode);
 
+    if (!title || !startEpisode || !endEpisode) {
+        toast({ title: "خطأ", description: "يرجى ملء جميع الحقول.", variant: "destructive" });
+        return;
     }
+    if (isNaN(startNum) || isNaN(endNum) || startNum <= 0 || endNum <= 0) {
+        toast({ title: "خطأ", description: "يرجى إدخال أرقام حلقات صالحة (أكبر من صفر).", variant: "destructive" });
+        return;
+    }
+    if (startNum > endNum) {
+      toast({ title: "خطأ", description: "يجب أن تكون 'من الحلقة' أصغر من أو تساوي 'إلى الحلقة'.", variant: "destructive" });
+      return;
+    }
+
+    onFetchEpisodes(title, startNum, endNum);
+    const newParams = new URLSearchParams();
+    newParams.set('title', title);
+    newParams.set('startEpisode', startNum.toString());
+    newParams.set('endEpisode', endNum.toString());
+    router.replace(`?${newParams.toString()}`, { scroll: false });
   };
 
   return (
@@ -49,7 +69,7 @@ export function CartoonForm({ onFetchEpisodes, isFetching }: CartoonFormProps) {
       <CardHeader>
         <CardTitle className="text-2xl font-headline text-center">جلب روابط حلقات الكرتون</CardTitle>
         <CardDescription className="text-center">
-          أدخل اسم الكرتون وعدد الحلقات لجلب الروابط من يوتيوب.
+          أدخل اسم الكرتون ونطاق الحلقات لجلب الروابط من يوتيوب.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -66,18 +86,33 @@ export function CartoonForm({ onFetchEpisodes, isFetching }: CartoonFormProps) {
               className="text-base py-2 px-3"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="episode-count" className="text-base">عدد الحلقات</Label>
-            <Input
-              id="episode-count"
-              type="number"
-              value={episodes}
-              onChange={(e) => setEpisodes(e.target.value)}
-              placeholder="مثال: 100"
-              required
-              min="1"
-              className="text-base py-2 px-3"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="start-episode" className="text-base">من الحلقة</Label>
+              <Input
+                id="start-episode"
+                type="number"
+                value={startEpisode}
+                onChange={(e) => setStartEpisode(e.target.value)}
+                placeholder="مثال: 1"
+                required
+                min="1"
+                className="text-base py-2 px-3"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="end-episode" className="text-base">إلى الحلقة</Label>
+              <Input
+                id="end-episode"
+                type="number"
+                value={endEpisode}
+                onChange={(e) => setEndEpisode(e.target.value)}
+                placeholder="مثال: 100"
+                required
+                min="1"
+                className="text-base py-2 px-3"
+              />
+            </div>
           </div>
           <Button type="submit" disabled={isFetching} className="w-full text-lg py-3 bg-primary hover:bg-primary/90 text-primary-foreground">
             <Search className="ml-2 h-5 w-5" />
