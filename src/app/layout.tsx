@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'Cartoon Linker',
+  title: 'Youtube Episodes Finder',
   description: 'Find and link long cartoon episodes from YouTube.',
 };
 

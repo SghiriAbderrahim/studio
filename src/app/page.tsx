@@ -216,7 +216,7 @@ export default function HomePage() {
       <header className="mb-12 text-center">
         <h1 className="text-5xl font-headline font-bold text-primary flex items-center justify-center">
           <TvMinimalPlay className="mr-3 h-12 w-12 text-accent" />
-          Cartoon Linker
+          Youtube Episodes Finder
         </h1>
         <p className="text-xl text-muted-foreground mt-2">
           أوجد حلقات كرتونك المفضلة بسهولة وسرعة!
@@ -264,7 +264,7 @@ export default function HomePage() {
         </div>
       )}
       <footer className="mt-16 pt-8 border-t w-full max-w-5xl text-center text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} Cartoon Linker. جميع الحقوق محفوظة.</p>
+        <p>&copy; {new Date().getFullYear()} Youtube Episodes Finder. جميع الحقوق محفوظة.</p>
         <p className="mt-1">تم التطوير بحب لمشاهدة الكرتون بدون انقطاع.</p>
       </footer>
     </div>
