@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { Episode } from '@/types';
 import { CartoonForm } from '@/components/cartoon-form';
@@ -23,6 +23,7 @@ export default function HomePage() {
   const [isFetching, setIsFetching] = useState(false);
   const [overallProgress, setOverallProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [apiQuotaErrorOccurred, setApiQuotaErrorOccurred] = useState<boolean>(false);
 
   const initializeEpisodes = (count: number) => {
     return Array.from({ length: count }, (_, i) => ({
@@ -39,6 +40,7 @@ export default function HomePage() {
   const handleFetchEpisodes = useCallback(async (title: string, count: number) => {
     setIsFetching(true);
     setError(null);
+    setApiQuotaErrorOccurred(false);
     setOverallProgress(0);
     setCurrentCartoonTitle(title);
     setTotalEpisodesToFetch(count);
@@ -47,9 +49,17 @@ export default function HomePage() {
     setEpisodes(initialEpisodes);
 
     const updatedEpisodes = [...initialEpisodes];
+    let localQuotaError = false;
 
     for (let i = 0; i < count; i++) {
-      if (!isFetching && i > 0) break; // Stop if fetching was cancelled (though no UI for cancel yet)
+      // Check if fetching was cancelled (e.g., by navigating away or a future cancel button)
+      // For now, this state isn't changed by UI during fetch, but good for robustness
+      const currentIsFetching = await new Promise<boolean>(resolve => setTimeout(() => resolve(isFetchingRef.current), 0));
+      if (!currentIsFetching && i > 0) {
+          toast({ title: "تم إيقاف البحث", description: "تم إيقاف عملية البحث عن الحلقات.", variant: "default" });
+          break; 
+      }
+
 
       updatedEpisodes[i] = { ...updatedEpisodes[i], status: 'Searching...', dataAihint: "video placeholder" };
       setEpisodes([...updatedEpisodes]);
@@ -57,19 +67,30 @@ export default function HomePage() {
       try {
         const fetchedEpisode = await fetchSingleEpisodeDetails(title, i + 1);
         updatedEpisodes[i] = fetchedEpisode;
+        if (fetchedEpisode.status === 'Error') {
+          const isQuotaError = fetchedEpisode.title.includes('تجاوز حصة API');
+          if (isQuotaError) {
+            localQuotaError = true;
+            setApiQuotaErrorOccurred(true); 
+          }
+          toast({
+            title: isQuotaError ? "خطأ في حصة YouTube API" : "خطأ في جلب حلقة",
+            description: `الحلقة ${i + 1}: ${isQuotaError ? "يبدو أن حصة استخدام API قد انتهت." : fetchedEpisode.title}`,
+            variant: "destructive",
+          });
+        }
       } catch (e: any) {
-        console.error(`Error processing episode ${i + 1}:`, e);
+        console.error(`Error processing episode ${i + 1} in HomePage:`, e);
         updatedEpisodes[i] = {
           ...updatedEpisodes[i],
-          title: `الحلقة ${i + 1} - خطأ في المعالجة`,
+          title: `الحلقة ${i + 1} - خطأ فادح في النظام`,
           status: 'Error',
           thumbnail: `https://placehold.co/480x360.png?text=Error+${i + 1}`,
           dataAihint: "error placeholder",
         };
-        setError(`حدث خطأ أثناء جلب الحلقة ${i + 1}.`);
         toast({
-          title: "خطأ في جلب حلقة",
-          description: `حدث خطأ أثناء جلب الحلقة ${i + 1}. قد يكون بسبب مشكلة في الاتصال أو مفتاح API.`,
+          title: "خطأ غير متوقع",
+          description: `حدث خطأ فادح أثناء محاولة جلب الحلقة ${i + 1}.`,
           variant: "destructive",
         });
       }
@@ -78,25 +99,41 @@ export default function HomePage() {
     }
 
     setIsFetching(false);
+    if (localQuotaError) {
+      setError("حدث خطأ بسبب تجاوز حصة YouTube API. قد لا يتم جلب جميع الحلقات. يرجى المحاولة مرة أخرى لاحقًا أو التحقق من إعدادات مفتاح API.");
+    } else if (updatedEpisodes.some(ep => ep.status === 'Error') && !error) {
+      // Only set generic error if no quota error was the primary issue and no other error is already set
+      // setError("حدثت أخطاء أثناء جلب بعض الحلقات. تحقق من التفاصيل لكل حلقة.");
+    }
+
+
     const foundCount = updatedEpisodes.filter(ep => ep.status === 'Found').length;
     toast({
         title: "اكتمل البحث!",
-        description: `تم العثور على ${foundCount} من أصل ${count} حلقة.`,
+        description: `تم العثور على ${foundCount} من أصل ${count} حلقة. ${localQuotaError ? 'بعض الحلقات فشلت بسبب تجاوز حصة API.' : ''}`,
     });
-  }, [toast, isFetching]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]); // Removed isFetching from deps as it causes re-runs, use ref instead for cancellation check
+
+  // Ref to hold the current isFetching state for use in the loop without causing re-renders/re-runs of useCallback
+  const isFetchingRef = useRef(isFetching);
+  useEffect(() => {
+    isFetchingRef.current = isFetching;
+  }, [isFetching]);
 
 
   useEffect(() => {
     const titleFromQuery = searchParams.get('title');
     const episodesFromQuery = searchParams.get('episodes');
-    if (titleFromQuery && episodesFromQuery && !isFetching && episodes.length === 0) {
+    if (titleFromQuery && episodesFromQuery && !isFetchingRef.current && episodes.length === 0) {
       const count = parseInt(episodesFromQuery);
       if (count > 0) {
         handleFetchEpisodes(titleFromQuery, count);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]); // Only run on initial load or if searchParams change from external navigation
+  }, [searchParams, handleFetchEpisodes]); 
+
 
   const handleReloadEpisode = useCallback(async (episodeNumber: number) => {
     const episodeIndex = episodes.findIndex(ep => ep.episodeNumber === episodeNumber);
@@ -119,27 +156,48 @@ export default function HomePage() {
     try {
       const fetchedEpisode = await fetchSingleEpisodeDetails(currentCartoonTitle, episodeNumber);
       updatedEpisodes[episodeIndex] = fetchedEpisode;
-       toast({
-        title: "اكتملت إعادة المحاولة",
-        description: `تمت محاولة إعادة تحميل الحلقة ${episodeNumber}. الحالة: ${fetchedEpisode.status === 'Found' ? 'تم العثور' : 'لم يتم العثور'}`,
-        variant: fetchedEpisode.status === 'Found' ? "default" : "destructive",
-      });
+      setEpisodes([...updatedEpisodes]); // Update UI immediately
+
+      if (fetchedEpisode.status === 'Error') {
+        const isQuotaError = fetchedEpisode.title.includes('تجاوز حصة API');
+        if (isQuotaError) {
+            setApiQuotaErrorOccurred(true); // Set global flag
+            setError("حدث خطأ بسبب تجاوز حصة YouTube API. يرجى المحاولة مرة أخرى لاحقًا أو التحقق من إعدادات مفتاح API.");
+        }
+        toast({
+          title: isQuotaError ? "خطأ في حصة YouTube API" : "خطأ في إعادة تحميل الحلقة",
+          description: `الحلقة ${episodeNumber}: ${isQuotaError ? "يبدو أن حصة استخدام API قد انتهت." : fetchedEpisode.title}`,
+          variant: "destructive",
+        });
+      } else if (fetchedEpisode.status === 'Found') {
+         toast({
+            title: "اكتملت إعادة المحاولة",
+            description: `تم العثور على الحلقة ${episodeNumber}.`,
+        });
+      } else { // Not Found
+         toast({
+            title: "لم يتم العثور",
+            description: `لم يتم العثور على فيديو مناسب للحلقة ${episodeNumber} بعد إعادة المحاولة.`,
+            variant: "default",
+        });
+      }
     } catch (e: any) {
-      console.error(`Error reloading episode ${episodeNumber}:`, e);
+      console.error(`Error reloading episode ${episodeNumber} in HomePage:`, e);
       updatedEpisodes[episodeIndex] = {
-        ...originalEpisode, // Revert to original on error, but mark as error
+        ...originalEpisode, 
         status: 'Error',
+        title: `الحلقة ${episodeNumber} - خطأ فادح في النظام`,
         thumbnail: `https://placehold.co/480x360.png?text=Error+${episodeNumber}`,
         dataAihint: "error placeholder",
       };
+      setEpisodes([...updatedEpisodes]);
       toast({
-        title: "خطأ في إعادة تحميل الحلقة",
-        description: `حدث خطأ أثناء إعادة تحميل الحلقة ${episodeNumber}.`,
+        title: "خطأ غير متوقع",
+        description: `حدث خطأ فادح أثناء محاولة إعادة تحميل الحلقة ${episodeNumber}.`,
         variant: "destructive",
       });
     }
-    setEpisodes([...updatedEpisodes]);
-  }, [episodes, currentCartoonTitle, toast]);
+  }, [episodes, currentCartoonTitle, toast, setError, setApiQuotaErrorOccurred]);
 
 
   return (
@@ -165,10 +223,10 @@ export default function HomePage() {
         </div>
       )}
 
-      {error && !isFetching && ( // Only show general error if not fetching (individual errors shown by toast)
+      {error && !isFetching && ( 
         <Alert variant="destructive" className="mt-8 w-full max-w-2xl">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>خطأ</AlertTitle>
+          <AlertTitle>خطأ عام</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -186,7 +244,7 @@ export default function HomePage() {
         </section>
       )}
       
-      {!isFetching && episodes.length === 0 && (
+      {!isFetching && episodes.length === 0 && !error && (
         <div className="mt-12 text-center text-muted-foreground">
           <TvMinimalPlay className="mx-auto h-16 w-16 mb-4 text-gray-400" />
           <p className="text-lg">أدخل اسم الكرتون وعدد الحلقات لبدء البحث.</p>

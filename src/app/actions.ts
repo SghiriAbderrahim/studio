@@ -1,3 +1,4 @@
+
 "use server";
 
 import type { Episode } from '@/types';
@@ -47,10 +48,12 @@ export async function fetchSingleEpisodeDetails(
 
     if (filteredResults.length > 0) {
       const chosenVideo = filteredResults[0];
-      const bestThumbnail = videoDetailsResponse.items.find(v => v.id === chosenVideo.videoId)?.snippet.thumbnails.high?.url || 
-                            videoDetailsResponse.items.find(v => v.id === chosenVideo.videoId)?.snippet.thumbnails.medium?.url ||
+      const bestThumbnailItem = videoDetailsResponse.items.find(v => v.id === chosenVideo.videoId);
+      const bestThumbnail = bestThumbnailItem?.snippet.thumbnails.high?.url || 
+                            bestThumbnailItem?.snippet.thumbnails.medium?.url ||
+                            bestThumbnailItem?.snippet.thumbnails.default?.url ||
                             `https://i.ytimg.com/vi/${chosenVideo.videoId}/hqdefault.jpg`;
-
+      
       return {
         episodeNumber,
         title: chosenVideo.title,
@@ -70,11 +73,16 @@ export async function fetchSingleEpisodeDetails(
         status: 'Not Found',
       };
     }
-  } catch (error) {
-    console.error(`Error fetching episode ${episodeNumber} for ${cartoonTitle}:`, error);
+  } catch (error: any) {
+    console.error(`Error fetching episode ${episodeNumber} for ${cartoonTitle}:`, error.message);
+    const errorMessage = error.message || 'Unknown error';
+    const isQuotaError = errorMessage.toLowerCase().includes('quotaexceeded') || 
+                         errorMessage.toLowerCase().includes('dailyLimitExceeded') ||
+                         errorMessage.toLowerCase().includes('usageLimits.dailyLimitExceeded');
+
     return {
       episodeNumber,
-      title: `الحلقة ${episodeNumber} - خطأ في البحث`,
+      title: `الحلقة ${episodeNumber} - ${isQuotaError ? 'تجاوز حصة API' : 'خطأ في البحث'}`,
       link: '#',
       duration: 0,
       thumbnail: `https://placehold.co/480x360.png?text=Error`,
