@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Episode } from '@/types';
@@ -5,17 +6,18 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Button } from "@/components/ui/button";
 import Image from 'next/image';
 import { formatDuration } from '@/lib/utils';
-import { Clapperboard, AlertCircle, CheckCircle, Hourglass, Link as LinkIcon } from 'lucide-react';
+import { Clapperboard, AlertCircle, CheckCircle, Hourglass, Link as LinkIcon, RefreshCw } from 'lucide-react';
 
 interface EpisodeCardProps {
   episode: Episode;
+  onReload?: (episodeNumber: number) => void;
 }
 
-export function EpisodeCard({ episode }: EpisodeCardProps) {
+export function EpisodeCard({ episode, onReload }: EpisodeCardProps) {
   const getStatusIcon = () => {
     switch (episode.status) {
       case 'Searching...':
-        return <Hourglass className="h-4 w-4 text-yellow-500 animate-spin" />;
+        return <Hourglass className="h-4 w-4 text-yellow-500" />; // Spin is handled by RefreshCw now
       case 'Found':
         return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'Not Found':
@@ -47,7 +49,7 @@ export function EpisodeCard({ episode }: EpisodeCardProps) {
           width={480}
           height={360}
           className="w-full h-48 object-cover"
-          data-ai-hint="video placeholder"
+          data-ai-hint={episode.dataAihint || "video placeholder"}
           unoptimized={episode.thumbnail.startsWith('https://placehold.co')}
         />
       </CardHeader>
@@ -56,8 +58,20 @@ export function EpisodeCard({ episode }: EpisodeCardProps) {
           <span className="font-bold">حلقة {episode.episodeNumber}:</span> {episode.title.substring(0,100)}${episode.title.length > 100 ? '...' : ''}
         </CardTitle>
         <div className="text-sm text-muted-foreground flex items-center space-x-2 space-x-reverse mt-2">
-          {getStatusIcon()}
+          {episode.status !== 'Searching...' && getStatusIcon()}
           <span>{getStatusText()}</span>
+          {onReload && (
+            <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 p-0 ml-2 rtl:mr-2 ltr:ml-2"
+                onClick={() => onReload(episode.episodeNumber)}
+                disabled={episode.status === 'Searching...'}
+                title="إعادة تحميل الحلقة"
+            >
+                <RefreshCw className={`h-4 w-4 ${episode.status === 'Searching...' ? 'animate-spin' : ''}`} />
+            </Button>
+          )}
         </div>
         {episode.status === 'Found' && (
           <p className="text-sm text-foreground mt-1">المدة: {formatDuration(episode.duration)}</p>

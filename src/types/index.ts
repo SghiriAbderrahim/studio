@@ -6,6 +6,7 @@ export interface Episode {
   thumbnail: string;
   status: 'Pending' | 'Searching...' | 'Found' | 'Not Found' | 'Error';
   youtubeVideoId?: string;
+  dataAihint?: string;
 }
 
 // Simplified YouTube API types based on what's needed

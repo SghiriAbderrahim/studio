@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -48,7 +49,9 @@ export default function HomePage() {
     const updatedEpisodes = [...initialEpisodes];
 
     for (let i = 0; i < count; i++) {
-      updatedEpisodes[i] = { ...updatedEpisodes[i], status: 'Searching...' };
+      if (!isFetching && i > 0) break; // Stop if fetching was cancelled (though no UI for cancel yet)
+
+      updatedEpisodes[i] = { ...updatedEpisodes[i], status: 'Searching...', dataAihint: "video placeholder" };
       setEpisodes([...updatedEpisodes]);
 
       try {
@@ -61,6 +64,7 @@ export default function HomePage() {
           title: `الحلقة ${i + 1} - خطأ في المعالجة`,
           status: 'Error',
           thumbnail: `https://placehold.co/480x360.png?text=Error+${i + 1}`,
+          dataAihint: "error placeholder",
         };
         setError(`حدث خطأ أثناء جلب الحلقة ${i + 1}.`);
         toast({
@@ -79,7 +83,8 @@ export default function HomePage() {
         title: "اكتمل البحث!",
         description: `تم العثور على ${foundCount} من أصل ${count} حلقة.`,
     });
-  }, [toast]);
+  }, [toast, isFetching]);
+
 
   useEffect(() => {
     const titleFromQuery = searchParams.get('title');
@@ -92,6 +97,50 @@ export default function HomePage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]); // Only run on initial load or if searchParams change from external navigation
+
+  const handleReloadEpisode = useCallback(async (episodeNumber: number) => {
+    const episodeIndex = episodes.findIndex(ep => ep.episodeNumber === episodeNumber);
+    if (episodeIndex === -1 || !currentCartoonTitle) {
+      toast({ title: "خطأ", description: "لا يمكن إعادة تحميل الحلقة، معلومات غير كافية.", variant: "destructive" });
+      return;
+    }
+
+    const updatedEpisodes = [...episodes];
+    const originalEpisode = updatedEpisodes[episodeIndex];
+
+    updatedEpisodes[episodeIndex] = {
+      ...originalEpisode,
+      status: 'Searching...',
+      thumbnail: `https://placehold.co/480x360.png?text=Reloading+${episodeNumber}`,
+      dataAihint: "video placeholder reloading",
+    };
+    setEpisodes([...updatedEpisodes]);
+
+    try {
+      const fetchedEpisode = await fetchSingleEpisodeDetails(currentCartoonTitle, episodeNumber);
+      updatedEpisodes[episodeIndex] = fetchedEpisode;
+       toast({
+        title: "اكتملت إعادة المحاولة",
+        description: `تمت محاولة إعادة تحميل الحلقة ${episodeNumber}. الحالة: ${fetchedEpisode.status === 'Found' ? 'تم العثور' : 'لم يتم العثور'}`,
+        variant: fetchedEpisode.status === 'Found' ? "default" : "destructive",
+      });
+    } catch (e: any) {
+      console.error(`Error reloading episode ${episodeNumber}:`, e);
+      updatedEpisodes[episodeIndex] = {
+        ...originalEpisode, // Revert to original on error, but mark as error
+        status: 'Error',
+        thumbnail: `https://placehold.co/480x360.png?text=Error+${episodeNumber}`,
+        dataAihint: "error placeholder",
+      };
+      toast({
+        title: "خطأ في إعادة تحميل الحلقة",
+        description: `حدث خطأ أثناء إعادة تحميل الحلقة ${episodeNumber}.`,
+        variant: "destructive",
+      });
+    }
+    setEpisodes([...updatedEpisodes]);
+  }, [episodes, currentCartoonTitle, toast]);
+
 
   return (
     <div className="container mx-auto px-4 py-8 min-h-screen flex flex-col items-center">
@@ -116,7 +165,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {error && (
+      {error && !isFetching && ( // Only show general error if not fetching (individual errors shown by toast)
         <Alert variant="destructive" className="mt-8 w-full max-w-2xl">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>خطأ</AlertTitle>
@@ -127,7 +176,7 @@ export default function HomePage() {
       {episodes.length > 0 && (
         <section className="mt-12 w-full">
           <h2 className="text-3xl font-headline font-semibold mb-6 text-center">نتائج البحث عن "{currentCartoonTitle}"</h2>
-          <EpisodeList episodes={episodes} />
+          <EpisodeList episodes={episodes} onReloadEpisode={handleReloadEpisode} />
           <ActionButtons 
             episodes={episodes} 
             cartoonTitle={currentCartoonTitle}
