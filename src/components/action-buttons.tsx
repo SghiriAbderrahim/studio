@@ -1,8 +1,9 @@
+
 "use client";
 
 import type { Episode } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Download, Copy, Share2 } from 'lucide-react';
+import { Download, Copy, Share2, ArrowDownToLine } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams } from 'next/navigation';
 
@@ -29,6 +30,21 @@ export function ActionButtons({ episodes, cartoonTitle, episodeCount, isFetching
         .catch(() => toast({ title: "خطأ", description: "لم يتم نسخ الروابط.", variant: "destructive" }));
     } else {
       toast({ title: "لا يوجد روابط", description: "لا توجد روابط صالحة لنسخها.", variant: "destructive" });
+    }
+  };
+
+  const handleCopySnaptubeLinks = () => {
+    const links = episodes
+      .filter(ep => ep.status === 'Found' && ep.link !== '#')
+      .map(ep => ep.link) // Snaptube usually just needs the direct links
+      .join('\n');
+    
+    if (links) {
+      navigator.clipboard.writeText(links)
+        .then(() => toast({ title: "تم نسخ الروابط لسناب تيوب!", description: "يمكنك الآن لصق الروابط في سناب تيوب للتحميل." }))
+        .catch(() => toast({ title: "خطأ", description: "لم يتم نسخ الروابط.", variant: "destructive" }));
+    } else {
+      toast({ title: "لا يوجد روابط", description: "لا توجد روابط صالحة لنسخها لسناب تيوب.", variant: "destructive" });
     }
   };
 
@@ -59,18 +75,6 @@ export function ActionButtons({ episodes, cartoonTitle, episodeCount, isFetching
     const autoTable = (await import('jspdf-autotable')).default;
     
     const doc = new jsPDF();
-
-    // Add custom font (ensure you have the .ttf file or use a standard font)
-    // For simplicity, we'll use a standard font. If Amiri is needed, it must be embedded.
-    // doc.addFileToVFS('Amiri-Regular.ttf', AmiriRegularBase64);
-    // doc.addFont('Amiri-Regular.ttf', 'Amiri', 'normal');
-    // doc.setFont('Amiri');
-    // For now, use a built-in font that might support Arabic characters better or default.
-    // Default jsPDF fonts have limited Arabic support. Consider helvetica or times.
-    
-    // Workaround for Arabic text: jsPDF has poor Arabic support by default.
-    // One common workaround is to reverse the text and use a font that displays disjointed letters.
-    // This is complex. For now, we'll attempt with standard fonts and acknowledge limitations.
     
     doc.setFontSize(18);
     doc.text(`قائمة حلقات: ${cartoonTitle}`, 105, 15, { align: 'center' });
@@ -91,17 +95,11 @@ export function ActionButtons({ episodes, cartoonTitle, episodeCount, isFetching
     });
 
     autoTable(doc, {
-      head: [tableColumn.reverse()], // Reverse for RTL appearance
-      body: tableRows.map(row => row.reverse()), // Reverse each row for RTL
+      head: [tableColumn.reverse()], 
+      body: tableRows.map(row => row.reverse()), 
       startY: 25,
-      styles: { halign: 'right' }, // Align text to the right for RTL
-      headStyles: {fillColor: [38, 127, 204], halign: 'center'}, // Example: Soft Blue
-      // didDrawCell: (data) => { // This is needed for complex font handling
-      //   if (data.section === 'body' && data.column.index >=0) {
-      //     // For Arabic, you might need to use doc.text with custom handling here
-      //     // doc.text(reversedText(data.cell.raw.toString()), data.cell.x + data.cell.width - 5, data.cell.y + data.cell.height / 2 + 3);
-      //   }
-      // }
+      styles: { halign: 'right' }, 
+      headStyles: {fillColor: [38, 127, 204], halign: 'center'},
     });
     
     doc.save(`${cartoonTitle}_episodes.pdf`);
@@ -121,6 +119,10 @@ export function ActionButtons({ episodes, cartoonTitle, episodeCount, isFetching
         <Copy className="ml-2 h-5 w-5" />
         نسخ كل الروابط
       </Button>
+      <Button onClick={handleCopySnaptubeLinks} disabled={isFetching || !hasResults} variant="outline" className="text-base">
+        <ArrowDownToLine className="ml-2 h-5 w-5" />
+        نسخ روابط سناب تيوب
+      </Button>
       <Button onClick={handleShare} disabled={isFetching && (!cartoonTitle || episodeCount === 0)} variant="outline" className="text-base">
         <Share2 className="ml-2 h-5 w-5" />
         مشاركة النتيجة
@@ -128,8 +130,3 @@ export function ActionButtons({ episodes, cartoonTitle, episodeCount, isFetching
     </div>
   );
 }
-
-// Basic Arabic text reverser (for jsPDF if no proper RTL support)
-// function reversedText(text: string) {
-//  return text.split('').reverse().join('');
-// }
