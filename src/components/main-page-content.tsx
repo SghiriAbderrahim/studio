@@ -13,6 +13,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, TvMinimalPlay } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
+const API_CALL_DELAY_MS = 750; // Delay between fetching details for each episode
+
 export function MainPageContent() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -66,9 +68,13 @@ export function MainPageContent() {
       
       // eslint-disable-next-line no-loop-func
       const currentIsFetching = await new Promise<boolean>(resolve => setTimeout(() => resolve(isFetchingRef.current), 0));
-      if (!currentIsFetching && i > 0) {
+      if (!currentIsFetching && i > 0) { // Check if fetching was stopped externally
           toast({ title: "تم إيقاف البحث", description: "تم إيقاف عملية البحث عن الحلقات.", variant: "default" });
           break; 
+      }
+      
+      if (i > 0) { // Add delay before fetching next episode, but not for the first one
+        await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS));
       }
 
       const episodeIndex = updatedEpisodes.findIndex(ep => ep.episodeNumber === currentEpisodeNumber);
@@ -81,14 +87,14 @@ export function MainPageContent() {
         const fetchedEpisode = await fetchSingleEpisodeDetails(title, currentEpisodeNumber);
         updatedEpisodes[episodeIndex] = fetchedEpisode;
         if (fetchedEpisode.status === 'Error') {
-          const isQuotaError = fetchedEpisode.title.includes('تجاوز حصة API');
+          const isQuotaError = fetchedEpisode.title.includes('تجاوز حصة API') || fetchedEpisode.title.toLowerCase().includes('quota') || fetchedEpisode.title.toLowerCase().includes('limit');
           if (isQuotaError) {
             localQuotaError = true;
             setApiQuotaErrorOccurred(true); 
           }
           toast({
             title: isQuotaError ? "خطأ في حصة YouTube API" : "خطأ في جلب حلقة",
-            description: `الحلقة ${currentEpisodeNumber}: ${isQuotaError ? "يبدو أن حصة استخدام API قد انتهت." : fetchedEpisode.title}`,
+            description: `الحلقة ${currentEpisodeNumber}: ${isQuotaError ? "يبدو أن حصة استخدام API قد انتهت أو تم تجاوز الحد." : fetchedEpisode.title}`,
             variant: "destructive",
           });
         }
@@ -113,15 +119,13 @@ export function MainPageContent() {
 
     setIsFetching(false);
     if (localQuotaError) {
-      setError("حدث خطأ بسبب تجاوز حصة YouTube API. قد لا يتم جلب جميع الحلقات. يرجى المحاولة مرة أخرى لاحقًا أو التحقق من إعدادات مفتاح API.");
-    } else if (updatedEpisodes.some(ep => ep.status === 'Error') && !error) {
-      // setError("حدثت أخطاء أثناء جلب بعض الحلقات. تحقق من التفاصيل لكل حلقة.");
+      setError("حدث خطأ بسبب تجاوز حصة YouTube API أو الوصول للحد الأقصى للطلبات. قد لا يتم جلب جميع الحلقات. يرجى المحاولة مرة أخرى لاحقًا أو التحقق من إعدادات مفاتيح API.");
     }
 
     const foundCount = updatedEpisodes.filter(ep => ep.status === 'Found').length;
     toast({
         title: "اكتمل البحث!",
-        description: `تم العثور على ${foundCount} من أصل ${totalEpisodesToFetch} حلقة. ${localQuotaError ? 'بعض الحلقات فشلت بسبب تجاوز حصة API.' : ''}`,
+        description: `تم العثور على ${foundCount} من أصل ${totalEpisodesToFetch} حلقة. ${localQuotaError ? 'بعض الحلقات فشلت بسبب مشاكل API.' : ''}`,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast]); 
@@ -164,6 +168,9 @@ export function MainPageContent() {
       dataAihint: "video placeholder reloading",
     };
     setEpisodes([...updatedEpisodes]);
+    
+    // Add delay for single reload as well for consistency, though less critical
+    await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS / 2)); // Shorter delay for single reload
 
     try {
       const fetchedEpisode = await fetchSingleEpisodeDetails(currentCartoonTitle, episodeNumber);
@@ -171,14 +178,14 @@ export function MainPageContent() {
       setEpisodes([...updatedEpisodes]); 
 
       if (fetchedEpisode.status === 'Error') {
-        const isQuotaError = fetchedEpisode.title.includes('تجاوز حصة API');
+        const isQuotaError = fetchedEpisode.title.includes('تجاوز حصة API') || fetchedEpisode.title.toLowerCase().includes('quota') || fetchedEpisode.title.toLowerCase().includes('limit');
         if (isQuotaError) {
             setApiQuotaErrorOccurred(true); 
-            setError("حدث خطأ بسبب تجاوز حصة YouTube API. يرجى المحاولة مرة أخرى لاحقًا أو التحقق من إعدادات مفتاح API.");
+            setError("حدث خطأ بسبب تجاوز حصة YouTube API أو الوصول للحد الأقصى للطلبات. يرجى المحاولة مرة أخرى لاحقًا أو التحقق من إعدادات مفاتيح API.");
         }
         toast({
           title: isQuotaError ? "خطأ في حصة YouTube API" : "خطأ في إعادة تحميل الحلقة",
-          description: `الحلقة ${episodeNumber}: ${isQuotaError ? "يبدو أن حصة استخدام API قد انتهت." : fetchedEpisode.title}`,
+          description: `الحلقة ${episodeNumber}: ${isQuotaError ? "يبدو أن حصة استخدام API قد انتهت أو تم تجاوز الحد." : fetchedEpisode.title}`,
           variant: "destructive",
         });
       } else if (fetchedEpisode.status === 'Found') {

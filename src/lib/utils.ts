@@ -36,6 +36,5 @@ export function formatDuration(totalSeconds: number): string {
   }
 }
 
-export const YOUTUBE_API_KEY = "AIzaSyCK6KivEFoC2Mpp0TI2ieobAdwQ9xuk0Y8"; // As provided in the request
 export const EXCLUDED_KEYWORDS = ["AMV", "تحليل", "reaction", "recap", "trailer", "teaser", "promo", "opening", "ending", "ost", "soundtrack", "review", "ملخص", "مراجعه", "اعلان", "مقدمة", "نهاية"];
 export const MINIMUM_DURATION_SECONDS = 15 * 60; // 15 minutes
