@@ -1,3 +1,4 @@
+
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -5,20 +6,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function parseISO8601Duration(duration: string): number {
-  if (!duration) return 0;
-  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
-  
-  if (!match) {
-    return 0;
-  }
-
-  const hours = parseInt(match[1] || "0");
-  const minutes = parseInt(match[2] || "0");
-  const seconds = parseFloat(match[3] || "0");
-
-  return hours * 3600 + minutes * 60 + seconds;
-}
+// parseISO8601Duration is no longer needed as youtube-sr provides duration in milliseconds,
+// which is converted to seconds directly in src/lib/youtube.ts or src/app/actions.ts.
 
 export function formatDuration(totalSeconds: number): string {
   if (totalSeconds < 0) return "غير معروف";

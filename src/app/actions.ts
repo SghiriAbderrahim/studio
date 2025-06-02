@@ -1,11 +1,11 @@
 
 "use server";
 
-import type { Episode } from '@/types';
+import type { Episode, SimplifiedYouTubeSearchItem } from '@/types';
 import { generateEpisodeSearchQuery } from '@/ai/flows/generate-episode-search-query';
 import { filterYouTubeResults } from '@/ai/flows/filter-youtube-results';
-import { searchYouTube, getVideoDetails } from '@/lib/youtube';
-import { parseISO8601Duration, EXCLUDED_KEYWORDS, MINIMUM_DURATION_SECONDS } from '@/lib/utils';
+import { searchYouTube } from '@/lib/youtube';
+import { EXCLUDED_KEYWORDS, MINIMUM_DURATION_SECONDS } from '@/lib/utils';
 
 export async function fetchSingleEpisodeDetails(
   cartoonTitle: string,
@@ -20,7 +20,7 @@ export async function fetchSingleEpisodeDetails(
 
     const searchResults = await searchYouTube(searchQuery);
 
-    if (searchResults.items.length === 0) {
+    if (searchResults.length === 0) {
       return {
         episodeNumber,
         title: `الحلقة ${episodeNumber} - لم يتم العثور على نتائج`,
@@ -31,13 +31,11 @@ export async function fetchSingleEpisodeDetails(
       };
     }
     
-    const videoIds = searchResults.items.map(item => item.id.videoId);
-    const videoDetailsResponse = await getVideoDetails(videoIds);
-
-    const candidateVideos = videoDetailsResponse.items.map(item => ({
-        videoId: item.id,
-        title: item.snippet.title,
-        duration: parseISO8601Duration(item.contentDetails.duration),
+    // youtube-sr results are already simplified: { videoId, title, duration (seconds), thumbnail }
+    const candidateVideos = searchResults.map(item => ({
+        videoId: item.videoId,
+        title: item.title,
+        duration: item.duration, // Already in seconds
       }));
 
     const filteredResults = await filterYouTubeResults({
@@ -48,18 +46,15 @@ export async function fetchSingleEpisodeDetails(
 
     if (filteredResults.length > 0) {
       const chosenVideo = filteredResults[0];
-      const bestThumbnailItem = videoDetailsResponse.items.find(v => v.id === chosenVideo.videoId);
-      const bestThumbnail = bestThumbnailItem?.snippet.thumbnails.high?.url || 
-                            bestThumbnailItem?.snippet.thumbnails.medium?.url ||
-                            bestThumbnailItem?.snippet.thumbnails.default?.url ||
-                            `https://i.ytimg.com/vi/${chosenVideo.videoId}/hqdefault.jpg`;
+      // Find the original search result to get its thumbnail
+      const originalVideoData = searchResults.find(sr => sr.videoId === chosenVideo.videoId);
       
       return {
         episodeNumber,
         title: chosenVideo.title,
         link: `https://www.youtube.com/watch?v=${chosenVideo.videoId}`,
         duration: chosenVideo.duration,
-        thumbnail: bestThumbnail,
+        thumbnail: originalVideoData?.thumbnail ?? `https://i.ytimg.com/vi/${chosenVideo.videoId}/hqdefault.jpg`,
         status: 'Found',
         youtubeVideoId: chosenVideo.videoId,
       };
@@ -75,14 +70,11 @@ export async function fetchSingleEpisodeDetails(
     }
   } catch (error: any) {
     console.error(`Error fetching episode ${episodeNumber} for ${cartoonTitle}:`, error.message);
-    const errorMessage = error.message || 'Unknown error';
-    const isQuotaError = errorMessage.toLowerCase().includes('quotaexceeded') || 
-                         errorMessage.toLowerCase().includes('dailyLimitExceeded') ||
-                         errorMessage.toLowerCase().includes('usageLimits.dailyLimitExceeded');
-
+    // With youtube-sr, quota errors are less likely. Errors might be network or parsing.
+    // For simplicity, treating all errors from youtube-sr as general search errors.
     return {
       episodeNumber,
-      title: `الحلقة ${episodeNumber} - ${isQuotaError ? 'تجاوز حصة API' : 'خطأ في البحث'}`,
+      title: `الحلقة ${episodeNumber} - خطأ في البحث`,
       link: '#',
       duration: 0,
       thumbnail: `https://placehold.co/480x360.png?text=Error`,

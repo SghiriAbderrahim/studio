@@ -1,3 +1,4 @@
+
 export interface Episode {
   episodeNumber: number;
   title: string;
@@ -9,87 +10,16 @@ export interface Episode {
   dataAihint?: string;
 }
 
-// Simplified YouTube API types based on what's needed
-export interface YouTubeSearchItem {
-  kind: string;
-  etag: string;
-  id: {
-    kind: string;
-    videoId: string;
-  };
-  snippet: {
-    publishedAt: string;
-    channelId: string;
-    title: string;
-    description: string;
-    thumbnails: {
-      default: { url: string; width: number; height: number };
-      medium: { url: string; width: number; height: number };
-      high: { url: string; width: number; height: number };
-    };
-    channelTitle: string;
-    liveBroadcastContent: string;
-    publishTime: string;
-  };
+// Simplified type for youtube-sr search results
+export interface SimplifiedYouTubeSearchItem {
+  videoId: string;
+  title: string;
+  duration: number; // in seconds
+  thumbnail: string;
 }
 
-export interface YouTubeSearchResponse {
-  kind: string;
-  etag: string;
-  nextPageToken?: string;
-  regionCode: string;
-  pageInfo: {
-    totalResults: number;
-    resultsPerPage: number;
-  };
-  items: YouTubeSearchItem[];
-}
+export type SimplifiedYouTubeSearchResponse = SimplifiedYouTubeSearchItem[];
 
-export interface YouTubeVideoItem {
-  kind: string;
-  etag: string;
-  id: string;
-  snippet: {
-    publishedAt: string;
-    channelId: string;
-    title: string;
-    description: string;
-    thumbnails: {
-      default: { url: string; width: number; height: number };
-      medium: { url: string; width: number; height: number };
-      high: { url: string; width: number; height: number };
-      standard?: { url: string; width: number; height: number };
-      maxres?: { url: string; width: number; height: number };
-    };
-    channelTitle: string;
-    tags?: string[];
-    categoryId: string;
-    liveBroadcastContent: string;
-    localized: {
-      title: string;
-      description: string;
-    };
-    defaultAudioLanguage?: string;
-  };
-  contentDetails: {
-    duration: string; // ISO 8601 duration
-    dimension: string;
-    definition: string;
-    caption: string;
-    licensedContent: boolean;
-    projection: string;
-  };
-}
-
-export interface YouTubeVideoListResponse {
-  kind: string;
-  etag: string;
-  items: YouTubeVideoItem[];
-  pageInfo: {
-    totalResults: number;
-    resultsPerPage: number;
-  };
-}
 
 // AI Flow related types re-exported for convenience if needed elsewhere, though typically imported directly.
 // import type { FilterYouTubeResultsInput, FilterYouTubeResultsOutput } from '@/ai/flows/filter-youtube-results';
